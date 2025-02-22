@@ -25,13 +25,10 @@ app.get("/", (req, res) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, { 
-  useNewUrlParser: true, 
-  useUnifiedTopology: true 
-})
-.then(() => console.log('MongoDB connected'))
-.catch((err) => console.error(err));
-
+mongoose
+  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
+  .catch((err) => console.error(err));
 
 // Middleware to authenticate token (for users and hospitals)
 const authenticateToken = (req, res, next) => {
@@ -77,9 +74,21 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Feedback endpoint – now returns valid JSON
+app.post('/api/feedback', authenticateToken, async (req, res) => {
+  const { feedback } = req.body;
+  try {
+    const newFeedback = new Feedback({ userId: req.user.userId, feedback });
+    await newFeedback.save();
+    res.json({ message: 'Feedback uploaded successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------- Hospital Endpoints ----------
 
-// Hospital registration (with address and city)
+// Hospital registration
 app.post('/api/hospital/register', async (req, res) => {
   const { name, email, password, address, city } = req.body;
   try {
@@ -122,7 +131,7 @@ app.put('/api/hospital/updateCounts', authenticateToken, async (req, res) => {
   }
 });
 
-// Hospital update location (latitude and longitude)
+// Hospital update location (coordinates)
 app.put('/api/hospital/updateLocation', authenticateToken, async (req, res) => {
   if (req.user.role !== 'hospital') return res.status(403).json({ error: 'Access denied' });
   const { latitude, longitude } = req.body;
@@ -143,9 +152,8 @@ app.get('/api/hospitals/nearby', async (req, res) => {
   }
   try {
     const allHospitals = await Hospital.find({ latitude: { $ne: null }, longitude: { $ne: null } });
-    // Haversine formula to compute distance between two points
     const toRad = (value) => (value * Math.PI) / 180;
-    const filtered = allHospitals.filter(hospital => {
+    const filtered = allHospitals.map(hospital => {
       const dLat = toRad(hospital.latitude - parseFloat(latitude));
       const dLon = toRad(hospital.longitude - parseFloat(longitude));
       const a =
@@ -155,9 +163,12 @@ app.get('/api/hospitals/nearby', async (req, res) => {
           Math.sin(dLon / 2) *
           Math.sin(dLon / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = 6371 * c; // Earth radius in kilometers
-      return distance <= parseFloat(radius);
-    });
+      const distance = 6371 * c; // distance in km
+      return {
+        ...hospital.toObject(),
+        distance: parseFloat(distance.toFixed(2)) // add distance field
+      };
+    }).filter(h => h.distance <= parseFloat(radius));
     res.json(filtered);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -165,12 +176,11 @@ app.get('/api/hospitals/nearby', async (req, res) => {
 });
 
 // ---------- Appointment Booking Endpoint ----------
-// When a user books a hospital, reduce bed count by 1 and record an appointment.
+// When a user books a hospital, deduct one bed and record an appointment.
 app.post('/api/appointments/book', authenticateToken, async (req, res) => {
   if (req.user.role !== 'user') return res.status(403).json({ error: 'Only users can book appointments' });
   const { hospitalId } = req.body;
   try {
-    // Find the hospital
     const hospital = await Hospital.findById(hospitalId);
     if (!hospital) return res.status(400).json({ error: 'Hospital not found' });
     if (hospital.beds <= 0) return res.status(400).json({ error: 'No beds available' });
@@ -186,6 +196,7 @@ app.post('/api/appointments/book', authenticateToken, async (req, res) => {
       appointmentDate: new Date(),
       hospitalName: hospital.name,
       hospitalAddress: hospital.address,
+      hospitalCity: hospital.city,
       hospitalEmail: hospital.email,
       notes: `Appointment booked on ${new Date().toLocaleDateString()}`
     });
@@ -196,8 +207,6 @@ app.post('/api/appointments/book', authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// Additional endpoints (e.g., feedback, SOS) can be added as needed
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
