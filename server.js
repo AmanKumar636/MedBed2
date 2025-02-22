@@ -1,4 +1,3 @@
-// C:/Final2/backend/server.js
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -19,11 +18,16 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// ✅ Add a default route for the root URL
+app.get('/', (req, res) => {
+  res.send("Welcome to MedBed API! 🚀 Visit /api for available endpoints.");
+});
+
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.error(err));
+  .catch((err) => console.error('MongoDB connection error:', err));
 
 // Middleware to authenticate token
 const authenticateToken = (req, res, next) => {
@@ -117,6 +121,7 @@ app.post('/api/sos', authenticateToken, async (req, res) => {
   }
 });
 
+// Start the server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
