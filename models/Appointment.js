@@ -6,9 +6,10 @@ const AppointmentSchema = new mongoose.Schema({
   hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', required: true },
   appointmentDate: { type: Date, required: true },
   notes: { type: String },
-  hospitalName: { type: String },      // Added for appointment record
-  hospitalAddress: { type: String },   // Added for appointment record
-  hospitalEmail: { type: String }      // Added for appointment record
+  hospitalName: { type: String },
+  hospitalAddress: { type: String },
+  hospitalCity: { type: String },
+  hospitalEmail: { type: String }
 });
 
 module.exports = mongoose.model('Appointment', AppointmentSchema);
